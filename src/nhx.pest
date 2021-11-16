@@ -1,0 +1,22 @@
+WHITESPACE = _{ " " | "\t" | NEWLINE }
+
+Tree       = _{ SOI ~ Node ~ ";" ~ EOI }
+Node       = _{ (Leaf | Clade)? }
+Leaf       = { name ~ Attributes? }
+Clade      = { "(" ~ Node? ~ ("," ~ Node?)* ~ ")" ~ name? ~ Attributes? }
+Attributes = { (":" ~ Length)? ~ Nhx? }
+Nhx        = _{ "[&&NHX" ~ NhxEntry+ ~ "]" }
+NhxEntry   = { ":" ~ nhx_key ~ "=" ~ nhx_value }
+Length     = _{ float }
+
+nhx_safe   = _{ !( ":" | "," | ";" | "(" | ")" | "[" | "]" | "=" | WHITESPACE ) ~ ANY }
+nhx_key    = { nhx_safe+ }
+nhx_value  = { nhx_safe+ }
+name_safe  = _{ !( ":" | "," | ";" | "(" | ")" | "[" | "]" | WHITESPACE ) ~ ANY }
+name       = { name_safe+ }
+float      = @{
+                  "-"?
+                  ~ ("0" | ASCII_NONZERO_DIGIT ~ ASCII_DIGIT*)
+                  ~ ("." ~ ASCII_DIGIT*)?
+                  ~ (^"e" ~ ("+" | "-")? ~ ASCII_DIGIT+)?
+              }
