@@ -86,6 +86,22 @@ impl Tree {
         r
     }
 
+    pub fn leaves_for(&self, n: usize) -> Vec<usize> {
+        fn find_descendants_leaves(t: &Tree, n: usize, ax: &mut Vec<usize>) {
+            if let Some(children) = t[n].children.as_ref() {
+                for &c in children.iter() {
+                    find_descendants_leaves(t, c, ax);
+                }
+            } else {
+                ax.push(t[n].id);
+            }
+        }
+
+        let mut r = vec![];
+        find_descendants_leaves(self, n, &mut r);
+        r
+    }
+
     pub fn siblings(&self, n: usize) -> Vec<usize> {
         self.descendants(self[n].parent)
             .into_iter()
@@ -202,6 +218,9 @@ impl Tree {
 
     pub fn leaves<'a>(&'a self) -> impl Iterator<Item = usize> + 'a {
         (0..self.nodes.len()).filter(move |n| self.nodes[*n].children.is_none())
+    }
+    pub fn inners<'a>(&'a self) -> impl Iterator<Item = usize> + 'a {
+        (0..self.nodes.len()).filter(move |n| self.nodes[*n].children.is_some())
     }
 
     pub fn leaf_names(&self) -> Vec<(usize, Option<&String>)> {
