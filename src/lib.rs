@@ -107,7 +107,7 @@ impl Tree {
                 Rule::NhxEntry => {
                     let mut kv = pair.into_inner();
                     let k = kv.next().unwrap().as_str().to_owned();
-                    let v = kv.next().unwrap().as_str().to_owned();
+                    let v = kv.next().map(|x| x.as_str().to_owned()).unwrap_or(String::new());
                     me.data.insert(k, v);
                 }
                 _ => {

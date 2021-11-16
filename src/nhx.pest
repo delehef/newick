@@ -6,7 +6,7 @@ Leaf       = { name ~ Attributes? }
 Clade      = { "(" ~ Node? ~ ("," ~ Node?)* ~ ")" ~ name? ~ Attributes? }
 Attributes = { (":" ~ Length)? ~ Nhx? }
 Nhx        = _{ "[&&NHX" ~ NhxEntry+ ~ "]" }
-NhxEntry   = { ":" ~ nhx_key ~ "=" ~ nhx_value }
+NhxEntry   = { ":" ~ nhx_key ~ "=" ~ nhx_value? }
 Length     = _{ float }
 
 nhx_safe   = _{ !( ":" | "," | ";" | "(" | ")" | "[" | "]" | "=" | WHITESPACE ) ~ ANY }
