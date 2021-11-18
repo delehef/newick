@@ -86,7 +86,7 @@ impl Tree {
         r
     }
 
-    pub fn leaves_for(&self, n: usize) -> Vec<usize> {
+    pub fn leaves_of(&self, n: usize) -> Vec<usize> {
         fn find_descendants_leaves(t: &Tree, n: usize, ax: &mut Vec<usize>) {
             if let Some(children) = t[n].children.as_ref() {
                 for &c in children.iter() {
