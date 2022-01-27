@@ -67,6 +67,56 @@ impl Tree {
         print_node(&self.nodes, 0, 0);
     }
 
+    pub fn parent(&self, n: usize) -> Option<usize> {
+        if self.nodes[n].parent == 0 {
+            None
+        } else {
+            Some(self.nodes[n].parent)
+        }
+    }
+
+    pub fn find_leaf<P>(&self, f: P) -> Option<usize>
+    where
+        P: Fn(&Node) -> bool,
+    {
+        match self
+            .nodes
+            .iter()
+            .enumerate()
+            .filter(|(_, n)| n.is_leaf())
+            .find(|(_i, n)| f(n))
+        {
+            Some((i, _)) => Some(i),
+            None => None,
+        }
+    }
+
+    pub fn mrca(&self, nodes: &[usize]) -> Option<usize> {
+        if nodes.is_empty() {
+            None
+        } else {
+            let ancestries = nodes
+                .iter()
+                .map(|&n| self.ascendance(n))
+                .collect::<Vec<_>>();
+
+            for p in ancestries[0].iter() {
+                if ancestries.iter().all(|a| a.contains(p)) {
+                    return Some(*p)
+                }
+            }
+            None
+        }
+    }
+
+    pub fn ascendance(&self, n: usize) -> Vec<usize> {
+        let mut r = Vec::new(); // TODO: use log-n pre-allocation
+        while let Some(x) = self.parent(n) {
+            r.push(x)
+        }
+        r
+    }
+
     pub fn descendants(&self, n: usize) -> Vec<usize> {
         fn find_descendants(t: &Tree, n: usize, ax: &mut Vec<usize>) {
             ax.push(t[n].id);
@@ -123,7 +173,10 @@ impl Tree {
                 Rule::NhxEntry => {
                     let mut kv = pair.into_inner();
                     let k = kv.next().unwrap().as_str().to_owned();
-                    let v = kv.next().map(|x| x.as_str().to_owned()).unwrap_or(String::new());
+                    let v = kv
+                        .next()
+                        .map(|x| x.as_str().to_owned())
+                        .unwrap_or(String::new());
                     me.data.insert(k, v);
                 }
                 _ => {
@@ -217,10 +270,10 @@ impl Tree {
     }
 
     pub fn leaves<'a>(&'a self) -> impl Iterator<Item = usize> + 'a {
-        (0..self.nodes.len()).filter(move |n| self.nodes[*n].children.is_none())
+        (0..self.nodes.len()).filter(move |n| self.nodes[*n].is_leaf())
     }
     pub fn inners<'a>(&'a self) -> impl Iterator<Item = usize> + 'a {
-        (0..self.nodes.len()).filter(move |n| self.nodes[*n].children.is_some())
+        (0..self.nodes.len()).filter(move |n| !self.nodes[*n].is_leaf())
     }
 
     pub fn leaf_names(&self) -> Vec<(usize, Option<&String>)> {
