@@ -102,7 +102,7 @@ impl Tree {
 
             for p in ancestries[0].iter() {
                 if ancestries.iter().all(|a| a.contains(p)) {
-                    return Some(*p)
+                    return Some(*p);
                 }
             }
             None
@@ -300,8 +300,6 @@ impl std::fmt::Display for Tree {
                 Some(children) => {
                     write!(f, "(")?;
 
-                    t[n].name.as_ref().map(|n| write!(f, "{}", n));
-
                     let mut children = children.iter().peekable();
                     while let Some(c) = children.next() {
                         fmt_node(t, *c, f)?;
@@ -310,6 +308,9 @@ impl std::fmt::Display for Tree {
                         }
                     }
                     write!(f, ")")?;
+                    if !t[n].is_leaf() {
+                        t[n].name.as_ref().map(|n| write!(f, "{}", n));
+                    };
                     t[n].length.map(|l| write!(f, ":{}", l));
                     if !t[n].data.is_empty() {
                         write!(f, "[&&NHX")?;
