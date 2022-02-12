@@ -152,6 +152,10 @@ impl Tree {
         r
     }
 
+    pub fn children(&self, n:usize) -> Vec<usize> {
+        self[n].children.clone().unwrap_or(vec![])
+    }
+
     pub fn siblings(&self, n: usize) -> Vec<usize> {
         self.descendants(self[n].parent)
             .into_iter()
