@@ -110,10 +110,14 @@ impl Tree {
     }
 
     pub fn ascendance(&self, n: usize) -> Vec<usize> {
-        let mut r = Vec::new(); // TODO: use log-n pre-allocation
+        let mut n = n;
+        let mut r = vec![n];
+
         while let Some(x) = self.parent(n) {
-            r.push(x)
+            r.push(x);
+            n = x;
         }
+
         r
     }
 
@@ -152,7 +156,7 @@ impl Tree {
         r
     }
 
-    pub fn children(&self, n:usize) -> Vec<usize> {
+    pub fn children(&self, n: usize) -> Vec<usize> {
         self[n].children.clone().unwrap_or(vec![])
     }
 
