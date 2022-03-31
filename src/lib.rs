@@ -1,348 +1,137 @@
 use pest::Parser;
-use std::{collections::HashMap, usize};
+use sorbus::*;
+use std::collections::HashMap;
 
 use pest_derive::Parser;
 #[derive(Parser)]
 #[grammar = "nhx.pest"]
 pub struct NhxParser;
 
-#[derive(Debug)]
-pub struct Node {
-    pub parent: usize,
-    pub id: usize,
+pub struct Data {
     pub name: Option<String>,
-    pub children: Option<Vec<usize>>,
-    pub length: Option<f32>,
-    pub data: HashMap<String, String>,
-}
-impl Node {
-    pub fn new_clade(parent: usize, id: usize) -> Self {
-        Node {
-            id,
-            name: None,
-            parent,
-            length: None,
-            data: HashMap::new(),
-            children: Some(Vec::new()),
-        }
-    }
-
-    pub fn new_leaf(parent: usize, id: usize) -> Self {
-        Node {
-            id,
-            name: None,
-            parent,
-            length: None,
-            data: HashMap::new(),
-            children: None,
-        }
-    }
-
-    pub fn is_duplication(&self) -> bool {
-        self.data.get("D").map_or(false, |d| d == "Y")
-    }
-    pub fn is_leaf(&self) -> bool {
-        self.children.is_none()
-    }
+    pub attrs: HashMap<String, String>,
 }
 
-pub struct Tree {
-    nodes: Vec<Node>,
+pub type NewickNode = Node<Data>;
+pub type NewickTree = Tree<Data>;
+
+pub trait Newick {
+    fn is_duplication(&self, n: usize) -> bool;
+    fn leaf_names(&self) -> Box<dyn Iterator<Item = &str> + '_>;
+    fn to_newick(&self) -> String;
 }
-impl Tree {
-    pub fn print(&self) {
-        fn print_node(nodes: &[Node], n: usize, o: usize) {
-            println!(
-                "{}{}:{:?} - {:?}",
-                str::repeat(" ", o),
-                &nodes[n].name.as_ref().unwrap_or(&String::new()),
-                &nodes[n].length.unwrap_or(-1.),
-                &nodes[n].data
-            );
-            nodes[n]
-                .children
-                .as_ref()
-                .map(|children| children.iter().for_each(|c| print_node(nodes, *c, o + 2)));
-        }
-        print_node(&self.nodes, 0, 0);
+
+impl Newick for NewickTree {
+    fn is_duplication(&self, n: usize) -> bool {
+        self[n].data.attrs.get("D").map_or(false, |d| d == "Y")
     }
 
-    pub fn parent(&self, n: usize) -> Option<usize> {
-        if self.nodes[n].parent == 0 {
-            None
-        } else {
-            Some(self.nodes[n].parent)
-        }
-    }
-
-    pub fn find_leaf<P>(&self, f: P) -> Option<usize>
-    where
-        P: Fn(&Node) -> bool,
-    {
-        match self
-            .nodes
-            .iter()
-            .enumerate()
-            .filter(|(_, n)| n.is_leaf())
-            .find(|(_i, n)| f(n))
-        {
-            Some((i, _)) => Some(i),
-            None => None,
-        }
-    }
-
-    pub fn mrca(&self, nodes: &[usize]) -> Option<usize> {
-        if nodes.is_empty() {
-            None
-        } else {
-            let ancestries = nodes
+    fn leaf_names(&self) -> Box<dyn Iterator<Item = &str> + '_> {
+        Box::new(
+            self.nodes()
                 .iter()
-                .map(|&n| self.ascendance(n))
-                .collect::<Vec<_>>();
-
-            for p in ancestries[0].iter() {
-                if ancestries.iter().all(|a| a.contains(p)) {
-                    return Some(*p);
-                }
-            }
-            None
-        }
+                .filter(|n| n.children().is_empty())
+                .filter_map(|n| n.data.name.as_ref().map(|n| n.as_str())),
+        )
     }
-
-    pub fn ascendance(&self, n: usize) -> Vec<usize> {
-        let mut n = n;
-        let mut r = vec![n];
-
-        while let Some(x) = self.parent(n) {
-            r.push(x);
-            n = x;
-        }
-
-        r
-    }
-
-    pub fn descendants(&self, n: usize) -> Vec<usize> {
-        fn find_descendants(t: &Tree, n: usize, ax: &mut Vec<usize>) {
-            ax.push(t[n].id);
-            if let Some(children) = t[n].children.as_ref() {
-                for &c in children.iter() {
-                    find_descendants(t, c, ax);
-                }
-            }
-        }
-
-        let mut r = vec![];
-        if let Some(children) = self[n].children.as_ref() {
-            for &c in children.iter() {
-                find_descendants(self, c, &mut r);
-            }
-        }
-        r
-    }
-
-    pub fn leaves_of(&self, n: usize) -> Vec<usize> {
-        fn find_descendants_leaves(t: &Tree, n: usize, ax: &mut Vec<usize>) {
-            if let Some(children) = t[n].children.as_ref() {
-                for &c in children.iter() {
-                    find_descendants_leaves(t, c, ax);
+    fn to_newick(&self) -> String {
+        fn fmt_node(t: &NewickTree, n: usize, r: &mut String) {
+            if t[n].is_leaf() {
+                t[n].data.name.as_ref().map(|n| r.push_str(n));
+                t[n].branch_length.map(|l| r.push_str(&format!(":{}", l)));
+                if !t[n].data.attrs.is_empty() {
+                    r.push_str("[&&NHX");
+                    for (k, v) in t[n].data.attrs.iter() {
+                        r.push_str(&format!(":{}={}", k, v));
+                    }
+                    r.push(']');
                 }
             } else {
-                ax.push(t[n].id);
+                r.push('(');
+
+                let mut children = t[n].children().iter().peekable();
+                while let Some(c) = children.next() {
+                    fmt_node(t, *c, r);
+                    if children.peek().is_some() {
+                        r.push_str(",\n");
+                    }
+                }
+                r.push(')');
+                t[n].data.name.as_ref().map(|n| r.push_str(n));
+                t[n].branch_length.map(|l| r.push_str(&format!(":{}", l)));
+                if !t[n].data.attrs.is_empty() {
+                    r.push_str("[&&NHX");
+                    for (k, v) in t[n].data.attrs.iter() {
+                        r.push_str(&format!(":{}={}", k, v));
+                    }
+                    r.push(']');
+                }
             }
         }
-
-        let mut r = vec![];
-        find_descendants_leaves(self, n, &mut r);
+        let mut r = String::new();
+        fmt_node(self, 0, &mut r);
+        r.push(';');
         r
     }
+}
 
-    pub fn children(&self, n: usize) -> Vec<usize> {
-        self[n].children.clone().unwrap_or(vec![])
-    }
+pub fn from_string(content: &str) -> Result<NewickTree, pest::error::Error<Rule>> {
+    use pest::iterators::Pair;
 
-    pub fn siblings(&self, n: usize) -> Vec<usize> {
-        self.descendants(self[n].parent)
-            .into_iter()
-            .filter(|&nn| nn != n)
-            .filter(|n| self[*n].is_leaf())
-            .collect()
-    }
-
-    pub fn from_string(content: &str) -> Result<Self, pest::error::Error<Rule>> {
-        use pest::iterators::Pair;
-        enum Kind {
-            Clade,
-            Leaf,
-        }
-
-        fn parse_attrs(pair: Pair<Rule>, me: &mut Node) {
-            match pair.as_rule() {
-                Rule::float => me.length = Some(pair.as_str().parse::<f32>().unwrap()),
-                Rule::NhxEntry => {
-                    let mut kv = pair.into_inner();
-                    let k = kv.next().unwrap().as_str().to_owned();
-                    let v = kv
-                        .next()
-                        .map(|x| x.as_str().to_owned())
-                        .unwrap_or(String::new());
-                    me.data.insert(k, v);
-                }
-                _ => {
-                    unimplemented!();
-                }
+    fn parse_attrs(pair: Pair<Rule>, me: &mut NewickNode) {
+        match pair.as_rule() {
+            Rule::float => me.branch_length = Some(pair.as_str().parse::<f32>().unwrap()),
+            Rule::NhxEntry => {
+                let mut kv = pair.into_inner();
+                let k = kv.next().unwrap().as_str().to_owned();
+                let v = kv
+                    .next()
+                    .map(|x| x.as_str().to_owned())
+                    .unwrap_or(String::new());
+                me.data.attrs.insert(k, v);
+            }
+            _ => {
+                unimplemented!();
             }
         }
-
-        fn parse_node(
-            pair: Pair<Rule>,
-            parent: usize,
-            storage: &mut Vec<Node>,
-            my_kind: Kind,
-        ) -> usize {
-            let my_id = storage.len();
-            storage.push(match my_kind {
-                Kind::Clade => Node::new_clade(parent, my_id),
-                Kind::Leaf => Node::new_leaf(parent, my_id),
-            });
-
-            pair.into_inner().for_each(|inner| match inner.as_rule() {
-                Rule::Clade => {
-                    let child = parse_node(inner, my_id, storage, Kind::Clade);
-                    match &mut storage[my_id].children {
-                        Some(children) => children.push(child),
-                        _ => unimplemented!(),
-                    }
-                }
-                Rule::Leaf => {
-                    let child = parse_node(inner, my_id, storage, Kind::Leaf);
-                    match &mut storage[my_id].children {
-                        Some(children) => children.push(child),
-                        _ => unimplemented!(),
-                    }
-                }
-                Rule::name => {
-                    storage[my_id].name = Some(inner.as_str().to_owned());
-                }
-                Rule::Attributes => {
-                    for attr in inner.into_inner() {
-                        parse_attrs(attr, &mut storage[my_id])
-                    }
-                }
-                _ => unimplemented!(),
-            });
-
-            my_id
-        }
-
-        let root = NhxParser::parse(Rule::Tree, &content)?.next().unwrap();
-
-        let mut r = Vec::new();
-        let _ = parse_node(root, 0, &mut r, Kind::Clade);
-        Ok(Tree { nodes: r })
     }
 
-    pub fn from_filename(filename: &str) -> Result<Self, pest::error::Error<Rule>> {
-        let content = std::fs::read_to_string(filename).expect("cannot read file");
-        Self::from_string(&content)
-    }
+    fn parse_node(pair: Pair<Rule>, parent: usize, tree: &mut NewickTree) {
+        let my_id = tree.add_node(
+            parent,
+            Data {
+                name: None,
+                attrs: HashMap::new(),
+            },
+        );
 
-    pub fn depth(&self) -> f32 {
-        todo!()
-    }
-
-    pub fn node_depth(&self, n: usize) -> f32 {
-        let mut depth = self.nodes[n].length.unwrap();
-        let mut parent = self.nodes[n].parent;
-        while parent != 0 {
-            depth += self.nodes[parent].length.unwrap();
-            parent = self.nodes[parent].parent;
-        }
-        depth
-    }
-
-    pub fn node_topological_depth(&self, n: usize) -> f32 {
-        let mut depth = 0.;
-        let mut parent = self.nodes[n].parent;
-        while parent != 0 {
-            depth += 1.;
-            parent = self.nodes[parent].parent;
-        }
-        depth
-    }
-
-    pub fn topological_depth(&self) -> (usize, f32) {
-        self.leaves()
-            .map(|n| (n, self.node_topological_depth(n)))
-            .max_by(|x, y| x.1.partial_cmp(&y.1).unwrap())
-            .unwrap()
-    }
-
-    pub fn leaves<'a>(&'a self) -> impl Iterator<Item = usize> + 'a {
-        (0..self.nodes.len()).filter(move |n| self.nodes[*n].is_leaf())
-    }
-    pub fn inners<'a>(&'a self) -> impl Iterator<Item = usize> + 'a {
-        (0..self.nodes.len()).filter(move |n| !self.nodes[*n].is_leaf())
-    }
-
-    pub fn leaf_names(&self) -> Vec<(usize, Option<&String>)> {
-        self.leaves()
-            .map(|n| (n, self.nodes[n].name.as_ref()))
-            .collect()
-    }
-}
-impl std::ops::Index<usize> for Tree {
-    type Output = Node;
-    fn index(&self, i: usize) -> &Self::Output {
-        &self.nodes[i]
-    }
-}
-impl std::ops::IndexMut<usize> for Tree {
-    fn index_mut(&mut self, i: usize) -> &mut Self::Output {
-        &mut self.nodes[i]
-    }
-}
-impl std::fmt::Display for Tree {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fn fmt_node(t: &Tree, n: usize, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            match &t[n].children {
-                Some(children) => {
-                    write!(f, "(")?;
-
-                    let mut children = children.iter().peekable();
-                    while let Some(c) = children.next() {
-                        fmt_node(t, *c, f)?;
-                        if children.peek().is_some() {
-                            write!(f, ",\n")?;
-                        }
-                    }
-                    write!(f, ")")?;
-                    if !t[n].is_leaf() {
-                        t[n].name.as_ref().map(|n| write!(f, "{}", n));
-                    };
-                    t[n].length.map(|l| write!(f, ":{}", l));
-                    if !t[n].data.is_empty() {
-                        write!(f, "[&&NHX")?;
-                        for (k, v) in t[n].data.iter() {
-                            write!(f, ":{}={}", k, v)?
-                        }
-                        write!(f, "]")?;
-                    }
-                }
-                None => {
-                    t[n].name.as_ref().map(|n| write!(f, "{}", n));
-                    t[n].length.map(|l| write!(f, ":{}", l));
-                    if !t[n].data.is_empty() {
-                        write!(f, "[&&NHX")?;
-                        for (k, v) in t[n].data.iter() {
-                            write!(f, ":{}={}", k, v)?
-                        }
-                        write!(f, "]")?;
-                    }
+        pair.into_inner().for_each(|inner| match inner.as_rule() {
+            Rule::Clade => {
+                parse_node(inner, my_id, tree);
+            }
+            Rule::Leaf => {
+                parse_node(inner, my_id, tree);
+            }
+            Rule::name => {
+                tree[my_id].data.name = Some(inner.as_str().to_owned());
+            }
+            Rule::Attributes => {
+                for attr in inner.into_inner() {
+                    parse_attrs(attr, &mut tree[my_id])
                 }
             }
-            Ok(())
-        }
-        fmt_node(self, 0, f)?;
-        write!(f, ";")
+            _ => unimplemented!(),
+        });
     }
+
+    let root = NhxParser::parse(Rule::Tree, &content)?.next().unwrap();
+
+    let mut r = NewickTree::new();
+    let _ = parse_node(root, 0, &mut r);
+    Ok(r)
+}
+
+pub fn from_filename(filename: &str) -> Result<NewickTree, pest::error::Error<Rule>> {
+    let content = std::fs::read_to_string(filename).expect("cannot read file");
+    from_string(&content)
 }
