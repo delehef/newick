@@ -34,7 +34,7 @@ impl Newick for NewickTree {
                 .filter_map(|n| n.data.name.as_ref().map(|n| n.as_str())),
         )
     }
-    fn to_newick(&self) -> String {
+    fn to_nhx(&self) -> String {
         fn fmt_node(t: &NewickTree, n: usize, r: &mut String) {
             if t[n].is_leaf() {
                 t[n].data.name.as_ref().map(|n| r.push_str(n));
