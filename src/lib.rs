@@ -69,7 +69,7 @@ impl Newick for NewickTree {
             }
         }
         let mut r = String::new();
-        fmt_node(self, 0, &mut r);
+        fmt_node(self, self.root(), &mut r);
         r.push(';');
         r
     }
