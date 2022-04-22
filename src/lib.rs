@@ -53,7 +53,7 @@ impl Newick for NewickTree {
                 while let Some(c) = children.next() {
                     fmt_node(t, *c, r);
                     if children.peek().is_some() {
-                        r.push_str(",\n");
+                        r.push_str(",");
                     }
                 }
                 r.push(')');
@@ -132,6 +132,6 @@ pub fn from_string(content: &str) -> Result<NewickTree, pest::error::Error<Rule>
 }
 
 pub fn from_filename(filename: &str) -> Result<NewickTree, pest::error::Error<Rule>> {
-    let content = std::fs::read_to_string(filename).expect("cannot read file");
+    let content = std::fs::read_to_string(filename).expect(&format!("cannot read {}", filename));
     from_string(&content)
 }
