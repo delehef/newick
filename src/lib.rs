@@ -1,12 +1,29 @@
 use pest::Parser;
 use sorbus::*;
 use std::collections::HashMap;
+use thiserror::Error;
 
 use pest_derive::Parser;
 #[derive(Parser)]
 #[grammar = "nhx.pest"]
 pub struct NhxParser;
 
+#[derive(Error, Debug)]
+pub enum NewickError {
+    #[error("can't open file")]
+    FileError(#[from] std::io::Error),
+
+    #[error("no tree at root")]
+    NoTreeAtRoot(),
+
+    #[error("expected one tree, found {0}")]
+    TooManyTrees(usize),
+
+    #[error("parse error: {0}")]
+    ParseError(#[from] pest::error::Error<Rule>),
+}
+
+#[derive(Debug)]
 pub struct Data {
     pub name: Option<String>,
     pub attrs: HashMap<String, String>,
@@ -69,14 +86,64 @@ impl Newick for NewickTree {
             }
         }
         let mut r = String::new();
-        fmt_node(self, self.root(), &mut r);
-        r.push(';');
+        if !self.nodes().is_empty() {
+            fmt_node(self, self.root(), &mut r);
+            r.push(';');
+        }
         r
     }
 }
 
-pub fn from_string(content: &str) -> Result<NewickTree, pest::error::Error<Rule>> {
+pub fn from_string(content: &str) -> Result<Vec<NewickTree>, NewickError> {
     use pest::iterators::Pair;
+
+    fn parse(pair: Pair<Rule>, trees: &mut Vec<NewickTree>) -> Result<(), NewickError> {
+        match pair.as_rule() {
+            Rule::Trees => {
+                for proto_tree in pair.into_inner() {
+                    if let Some(root) = proto_tree.into_inner().next() {
+                        trees.push(NewickTree::new());
+                        parse_inner(root, 0, trees.last_mut().unwrap());
+                    }
+                }
+            }
+            _ => {
+                unimplemented!()
+            }
+        }
+
+        Ok(())
+    }
+
+    fn parse_inner(pair: Pair<Rule>, parent: usize, tree: &mut NewickTree) {
+        let my_id = tree.add_node(
+            parent,
+            Data {
+                name: None,
+                attrs: HashMap::new(),
+            },
+        );
+
+        for inner in pair.into_inner() {
+            match inner.as_rule() {
+                Rule::Clade => {
+                    parse_inner(inner, my_id, tree);
+                }
+                Rule::Leaf => {
+                    parse_inner(inner, my_id, tree);
+                }
+                Rule::name => {
+                    tree[my_id].data.name = Some(inner.as_str().to_owned());
+                }
+                Rule::Attributes => {
+                    for attr in inner.into_inner() {
+                        parse_attrs(attr, &mut tree[my_id])
+                    }
+                }
+                _ => unimplemented!(),
+            };
+        }
+    }
 
     fn parse_attrs(pair: Pair<Rule>, me: &mut NewickNode) {
         match pair.as_rule() {
@@ -96,42 +163,33 @@ pub fn from_string(content: &str) -> Result<NewickTree, pest::error::Error<Rule>
         }
     }
 
-    fn parse_node(pair: Pair<Rule>, parent: usize, tree: &mut NewickTree) {
-        let my_id = tree.add_node(
-            parent,
-            Data {
-                name: None,
-                attrs: HashMap::new(),
-            },
-        );
+    let root = NhxParser::parse(Rule::Trees, &content)?.next().unwrap();
 
-        pair.into_inner().for_each(|inner| match inner.as_rule() {
-            Rule::Clade => {
-                parse_node(inner, my_id, tree);
-            }
-            Rule::Leaf => {
-                parse_node(inner, my_id, tree);
-            }
-            Rule::name => {
-                tree[my_id].data.name = Some(inner.as_str().to_owned());
-            }
-            Rule::Attributes => {
-                for attr in inner.into_inner() {
-                    parse_attrs(attr, &mut tree[my_id])
-                }
-            }
-            _ => unimplemented!(),
-        });
-    }
-
-    let root = NhxParser::parse(Rule::Tree, &content)?.next().unwrap();
-
-    let mut r = NewickTree::new();
-    let _ = parse_node(root, 0, &mut r);
+    let mut r = Vec::new();
+    let _ = parse(root, &mut r);
     Ok(r)
 }
 
-pub fn from_filename(filename: &str) -> Result<NewickTree, pest::error::Error<Rule>> {
+pub fn one_from_string(content: &str) -> Result<NewickTree, NewickError> {
+    let tree = from_string(content)?;
+    if tree.len() != 1 {
+        Err(NewickError::TooManyTrees(tree.len()))
+    } else {
+        Ok(tree.into_iter().next().unwrap())
+    }
+}
+
+pub fn from_filename(filename: &str) -> Result<Vec<NewickTree>, NewickError> {
     let content = std::fs::read_to_string(filename).expect(&format!("cannot read {}", filename));
     from_string(&content)
+}
+
+pub fn one_from_filename(filename: &str) -> Result<NewickTree, NewickError> {
+    let content = std::fs::read_to_string(filename).expect(&format!("cannot read {}", filename));
+    let tree = from_string(&content)?;
+    if tree.len() != 1 {
+        Err(NewickError::TooManyTrees(tree.len()))
+    } else {
+        Ok(tree.into_iter().next().unwrap())
+    }
 }

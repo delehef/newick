@@ -1,6 +1,7 @@
 WHITESPACE = _{ " " | "\t" | NEWLINE }
 
-Tree       = _{ SOI ~ Node ~ ";" ~ EOI }
+Trees      = { SOI ~ Tree* ~ EOI }
+Tree       = { Node ~ ";" }
 Node       = _{ (Leaf | Clade)? }
 Leaf       = { name ~ Attributes? }
 Clade      = { "(" ~ Node? ~ ("," ~ Node?)* ~ ")" ~ name? ~ Attributes? }

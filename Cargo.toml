@@ -9,3 +9,4 @@ edition = "2018"
 pest = "2"
 pest_derive = "2"
 sorbus = { path = "../sorbus" }
+thiserror = "1"
