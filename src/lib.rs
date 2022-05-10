@@ -10,7 +10,7 @@ pub struct NhxParser;
 
 #[derive(Error, Debug)]
 pub enum NewickError {
-    #[error("can't open file")]
+    #[error("failed to open file")]
     FileError(#[from] std::io::Error),
 
     #[error("no tree at root")]
@@ -18,6 +18,9 @@ pub enum NewickError {
 
     #[error("expected one tree, found {0}")]
     TooManyTrees(usize),
+
+    #[error("not a float: {0}")]
+    NotAFloat(String),
 
     #[error("parse error: {0}")]
     ParseError(#[from] pest::error::Error<Rule>),
@@ -103,7 +106,7 @@ pub fn from_string(content: &str) -> Result<Vec<NewickTree>, NewickError> {
                 for proto_tree in pair.into_inner() {
                     if let Some(root) = proto_tree.into_inner().next() {
                         trees.push(NewickTree::new());
-                        parse_inner(root, 0, trees.last_mut().unwrap());
+                        parse_inner(root, 0, trees.last_mut().unwrap())?;
                     }
                 }
             }
@@ -115,7 +118,11 @@ pub fn from_string(content: &str) -> Result<Vec<NewickTree>, NewickError> {
         Ok(())
     }
 
-    fn parse_inner(pair: Pair<Rule>, parent: usize, tree: &mut NewickTree) {
+    fn parse_inner(
+        pair: Pair<Rule>,
+        parent: usize,
+        tree: &mut NewickTree,
+    ) -> Result<(), NewickError> {
         let my_id = tree.add_node(
             parent,
             Data {
@@ -127,35 +134,39 @@ pub fn from_string(content: &str) -> Result<Vec<NewickTree>, NewickError> {
         for inner in pair.into_inner() {
             match inner.as_rule() {
                 Rule::Clade => {
-                    parse_inner(inner, my_id, tree);
+                    parse_inner(inner, my_id, tree)?;
                 }
                 Rule::Leaf => {
-                    parse_inner(inner, my_id, tree);
+                    parse_inner(inner, my_id, tree)?;
                 }
                 Rule::name => {
                     tree[my_id].data.name = Some(inner.as_str().to_owned());
                 }
                 Rule::Attributes => {
                     for attr in inner.into_inner() {
-                        parse_attrs(attr, &mut tree[my_id])
+                        parse_attrs(attr, &mut tree[my_id])?;
                     }
                 }
                 _ => unimplemented!(),
             };
         }
+
+        Ok(())
     }
 
-    fn parse_attrs(pair: Pair<Rule>, me: &mut NewickNode) {
+    fn parse_attrs(pair: Pair<Rule>, me: &mut NewickNode) -> Result<(), NewickError> {
         match pair.as_rule() {
-            Rule::float => me.branch_length = Some(pair.as_str().parse::<f32>().unwrap()),
+            Rule::float => pair
+                .as_str()
+                .parse::<f32>()
+                .map_err(|_| NewickError::NotAFloat(pair.as_str().to_owned()))
+                .map(|x| me.branch_length = Some(x)),
             Rule::NhxEntry => {
                 let mut kv = pair.into_inner();
                 let k = kv.next().unwrap().as_str().to_owned();
-                let v = kv
-                    .next()
-                    .map(|x| x.as_str().to_owned())
-                    .unwrap_or(String::new());
+                let v = kv.next().map(|x| x.as_str().to_owned()).unwrap_or_default();
                 me.data.attrs.insert(k, v);
+                Ok(())
             }
             _ => {
                 unimplemented!();
@@ -180,13 +191,12 @@ pub fn one_from_string(content: &str) -> Result<NewickTree, NewickError> {
 }
 
 pub fn from_filename(filename: &str) -> Result<Vec<NewickTree>, NewickError> {
-    let content = std::fs::read_to_string(filename).expect(&format!("cannot read {}", filename));
+    let content = std::fs::read_to_string(filename).map_err(|e| NewickError::FileError(e))?;
     from_string(&content)
 }
 
 pub fn one_from_filename(filename: &str) -> Result<NewickTree, NewickError> {
-    let content = std::fs::read_to_string(filename).expect(&format!("cannot read {}", filename));
-    let tree = from_string(&content)?;
+    let tree = from_filename(filename)?;
     if tree.len() != 1 {
         Err(NewickError::TooManyTrees(tree.len()))
     } else {
