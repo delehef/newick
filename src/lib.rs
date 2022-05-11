@@ -97,7 +97,7 @@ impl Newick for NewickTree {
     }
 }
 
-pub fn from_string(content: &str) -> Result<Vec<NewickTree>, NewickError> {
+pub fn from_string<S: AsRef<str>>(content: S) -> Result<Vec<NewickTree>, NewickError> {
     use pest::iterators::Pair;
 
     fn parse(pair: Pair<Rule>, trees: &mut Vec<NewickTree>) -> Result<(), NewickError> {
@@ -174,15 +174,15 @@ pub fn from_string(content: &str) -> Result<Vec<NewickTree>, NewickError> {
         }
     }
 
-    let root = NhxParser::parse(Rule::Trees, &content)?.next().unwrap();
+    let root = NhxParser::parse(Rule::Trees, content.as_ref())?.next().unwrap();
 
     let mut r = Vec::new();
     let _ = parse(root, &mut r);
     Ok(r)
 }
 
-pub fn one_from_string(content: &str) -> Result<NewickTree, NewickError> {
-    let tree = from_string(content)?;
+pub fn one_from_string<S: AsRef<str>>(content: S) -> Result<NewickTree, NewickError> {
+    let tree = from_string(content.as_ref())?;
     if tree.len() != 1 {
         Err(NewickError::TooManyTrees(tree.len()))
     } else {
@@ -190,13 +190,13 @@ pub fn one_from_string(content: &str) -> Result<NewickTree, NewickError> {
     }
 }
 
-pub fn from_filename(filename: &str) -> Result<Vec<NewickTree>, NewickError> {
-    let content = std::fs::read_to_string(filename).map_err(|e| NewickError::FileError(e))?;
+pub fn from_filename<S: AsRef<str>>(filename: S) -> Result<Vec<NewickTree>, NewickError> {
+    let content = std::fs::read_to_string(filename.as_ref()).map_err(|e| NewickError::FileError(e))?;
     from_string(&content)
 }
 
-pub fn one_from_filename(filename: &str) -> Result<NewickTree, NewickError> {
-    let tree = from_filename(filename)?;
+pub fn one_from_filename<S: AsRef<str>>(filename: S) -> Result<NewickTree, NewickError> {
+    let tree = from_filename(filename.as_ref())?;
     if tree.len() != 1 {
         Err(NewickError::TooManyTrees(tree.len()))
     } else {
