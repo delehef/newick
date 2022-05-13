@@ -48,17 +48,18 @@ impl Newick for NewickTree {
 
     fn leaf_names(&self) -> Box<dyn Iterator<Item = &str> + '_> {
         Box::new(
-            self.nodes()
-                .iter()
-                .filter(|n| n.children().is_empty())
-                .filter_map(|n| n.data.name.as_ref().map(|n| n.as_str())),
+            self.nodes().filter(|n| n.children().is_empty()).filter_map(|n| n.data.name.as_deref()),
         )
     }
     fn to_newick(&self) -> String {
         fn fmt_node(t: &NewickTree, n: usize, r: &mut String) {
             if t[n].is_leaf() {
-                t[n].data.name.as_ref().map(|n| r.push_str(n));
-                t[n].branch_length.map(|l| r.push_str(&format!(":{}", l)));
+                if let Some(n) = t[n].data.name.as_ref() {
+                    r.push_str(n)
+                }
+                if let Some(l) = t[n].branch_length {
+                    r.push_str(&format!(":{}", l))
+                }
                 if !t[n].data.attrs.is_empty() {
                     r.push_str("[&&NHX");
                     for (k, v) in t[n].data.attrs.iter() {
@@ -73,12 +74,16 @@ impl Newick for NewickTree {
                 while let Some(c) = children.next() {
                     fmt_node(t, *c, r);
                     if children.peek().is_some() {
-                        r.push_str(",");
+                        r.push(',');
                     }
                 }
                 r.push(')');
-                t[n].data.name.as_ref().map(|n| r.push_str(n));
-                t[n].branch_length.map(|l| r.push_str(&format!(":{}", l)));
+                if let Some(n) = t[n].data.name.as_ref() {
+                    r.push_str(n)
+                }
+                if let Some(l) = t[n].branch_length {
+                    r.push_str(&format!(":{}", l))
+                }
                 if !t[n].data.attrs.is_empty() {
                     r.push_str("[&&NHX");
                     for (k, v) in t[n].data.attrs.iter() {
@@ -89,7 +94,7 @@ impl Newick for NewickTree {
             }
         }
         let mut r = String::new();
-        if !self.nodes().is_empty() {
+        if !self.is_empty() {
             fmt_node(self, self.root(), &mut r);
             r.push(';');
         }
@@ -106,7 +111,7 @@ pub fn from_string<S: AsRef<str>>(content: S) -> Result<Vec<NewickTree>, NewickE
                 for proto_tree in pair.into_inner() {
                     if let Some(root) = proto_tree.into_inner().next() {
                         trees.push(NewickTree::new());
-                        parse_inner(root, 0, trees.last_mut().unwrap())?;
+                        parse_inner(root, None, trees.last_mut().unwrap())?;
                     }
                 }
             }
@@ -120,24 +125,18 @@ pub fn from_string<S: AsRef<str>>(content: S) -> Result<Vec<NewickTree>, NewickE
 
     fn parse_inner(
         pair: Pair<Rule>,
-        parent: usize,
+        parent: Option<usize>,
         tree: &mut NewickTree,
     ) -> Result<(), NewickError> {
-        let my_id = tree.add_node(
-            parent,
-            Data {
-                name: None,
-                attrs: HashMap::new(),
-            },
-        );
+        let my_id = tree.add_node(parent, Data { name: None, attrs: HashMap::new() });
 
         for inner in pair.into_inner() {
             match inner.as_rule() {
                 Rule::Clade => {
-                    parse_inner(inner, my_id, tree)?;
+                    parse_inner(inner, Some(my_id), tree)?;
                 }
                 Rule::Leaf => {
-                    parse_inner(inner, my_id, tree)?;
+                    parse_inner(inner, Some(my_id), tree)?;
                 }
                 Rule::name => {
                     tree[my_id].data.name = Some(inner.as_str().to_owned());
@@ -191,7 +190,7 @@ pub fn one_from_string<S: AsRef<str>>(content: S) -> Result<NewickTree, NewickEr
 }
 
 pub fn from_filename<S: AsRef<str>>(filename: S) -> Result<Vec<NewickTree>, NewickError> {
-    let content = std::fs::read_to_string(filename.as_ref()).map_err(|e| NewickError::FileError(e))?;
+    let content = std::fs::read_to_string(filename.as_ref()).map_err(NewickError::FileError)?;
     from_string(&content)
 }
 
