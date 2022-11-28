@@ -1,0 +1,3 @@
+* Newick
+
+A library to parse, manipulate and generate trees in the newick format.
