@@ -43,26 +43,28 @@ pub trait Newick {
 
 impl Newick for NewickTree {
     fn is_duplication(&self, n: usize) -> bool {
-        self[n].data.attrs.get("D").map_or(false, |d| d == "Y")
+        self[n].data.as_ref().unwrap().attrs.get("D").map_or(false, |d| d == "Y")
     }
 
     fn leaf_names(&self) -> Box<dyn Iterator<Item = &str> + '_> {
         Box::new(
-            self.nodes().filter(|n| n.children().is_empty()).filter_map(|n| n.data.name.as_deref()),
+            self.nodes()
+                .filter(|n| n.children().is_empty())
+                .filter_map(|n| n.data.as_ref().unwrap().name.as_deref()),
         )
     }
     fn to_newick(&self) -> String {
         fn fmt_node(t: &NewickTree, n: usize, r: &mut String) {
             if t[n].is_leaf() {
-                if let Some(n) = t[n].data.name.as_ref() {
+                if let Some(n) = t[n].data.as_ref().unwrap().name.as_ref() {
                     r.push_str(n)
                 }
                 if let Some(l) = t[n].branch_length {
                     r.push_str(&format!(":{}", l))
                 }
-                if !t[n].data.attrs.is_empty() {
+                if !t[n].data.as_ref().unwrap().attrs.is_empty() {
                     r.push_str("[&&NHX");
-                    for (k, v) in t[n].data.attrs.iter() {
+                    for (k, v) in t[n].data.as_ref().unwrap().attrs.iter() {
                         r.push_str(&format!(":{}={}", k, v));
                     }
                     r.push(']');
@@ -78,15 +80,15 @@ impl Newick for NewickTree {
                     }
                 }
                 r.push(')');
-                if let Some(n) = t[n].data.name.as_ref() {
+                if let Some(n) = t[n].data.as_ref().unwrap().name.as_ref() {
                     r.push_str(n)
                 }
                 if let Some(l) = t[n].branch_length {
                     r.push_str(&format!(":{}", l))
                 }
-                if !t[n].data.attrs.is_empty() {
+                if !t[n].data.as_ref().unwrap().attrs.is_empty() {
                     r.push_str("[&&NHX");
-                    for (k, v) in t[n].data.attrs.iter() {
+                    for (k, v) in t[n].data.as_ref().unwrap().attrs.iter() {
                         r.push_str(&format!(":{}={}", k, v));
                     }
                     r.push(']');
@@ -128,7 +130,7 @@ pub fn from_string<S: AsRef<str>>(content: S) -> Result<Vec<NewickTree>, NewickE
         parent: Option<usize>,
         tree: &mut NewickTree,
     ) -> Result<(), NewickError> {
-        let my_id = tree.add_node(parent, Data { name: None, attrs: HashMap::new() });
+        let my_id = tree.add_node(parent, Some(Data { name: None, attrs: HashMap::new() }));
 
         for inner in pair.into_inner() {
             match inner.as_rule() {
@@ -139,7 +141,7 @@ pub fn from_string<S: AsRef<str>>(content: S) -> Result<Vec<NewickTree>, NewickE
                     parse_inner(inner, Some(my_id), tree)?;
                 }
                 Rule::name => {
-                    tree[my_id].data.name = Some(inner.as_str().to_owned());
+                    tree[my_id].data.as_mut().unwrap().name = Some(inner.as_str().to_owned());
                 }
                 Rule::Attributes => {
                     for attr in inner.into_inner() {
@@ -164,7 +166,7 @@ pub fn from_string<S: AsRef<str>>(content: S) -> Result<Vec<NewickTree>, NewickE
                 let mut kv = pair.into_inner();
                 let k = kv.next().unwrap().as_str().to_owned();
                 let v = kv.next().map(|x| x.as_str().to_owned()).unwrap_or_default();
-                me.data.attrs.insert(k, v);
+                me.data.as_mut().unwrap().attrs.insert(k, v);
                 Ok(())
             }
             _ => {
