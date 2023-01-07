@@ -1,5 +1,5 @@
 use pest::Parser;
-use sorbus::*;
+pub use sorbus::*;
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -26,10 +26,11 @@ pub enum NewickError {
     ParseError(#[from] pest::error::Error<Rule>),
 }
 
+pub type Attrs = HashMap<String, String>;
 #[derive(Debug)]
 pub struct Data {
     pub name: Option<String>,
-    pub attrs: HashMap<String, String>,
+    pub attrs: Attrs,
 }
 
 pub type NewickNode = Node<Data>;
@@ -37,20 +38,34 @@ pub type NewickTree = Tree<Data>;
 
 pub trait Newick {
     fn is_duplication(&self, n: usize) -> bool;
-    fn leaf_names(&self) -> Box<dyn Iterator<Item = &str> + '_>;
+    fn leaf_names(&self) -> Box<dyn Iterator<Item = &String> + '_>;
     fn to_newick(&self) -> String;
+    fn name(&self, n: NodeID) -> Option<&String>;
+    fn name_mut(&mut self, n: NodeID) -> Option<&mut String>;
+    fn attrs(&self, n: NodeID) -> &Attrs;
+    fn attrs_mut(&mut self, n: NodeID) -> &mut Attrs;
 }
 
 impl Newick for NewickTree {
+    fn name(&self, n: NodeID) -> Option<&String> {
+        self[n].data.as_ref().unwrap().name.as_ref()
+    }
+    fn name_mut(&mut self, n: NodeID) -> Option<&mut String> {
+        self[n].data.as_mut().unwrap().name.as_mut()
+    }
+    fn attrs(&self, n: NodeID) -> &Attrs {
+        &self[n].data.as_ref().unwrap().attrs
+    }
+    fn attrs_mut(&mut self, n: NodeID) -> &mut Attrs {
+        &mut self[n].data.as_mut().unwrap().attrs
+    }
     fn is_duplication(&self, n: usize) -> bool {
         self[n].data.as_ref().unwrap().attrs.get("D").map_or(false, |d| d == "Y")
     }
 
-    fn leaf_names(&self) -> Box<dyn Iterator<Item = &str> + '_> {
+    fn leaf_names(&self) -> Box<dyn Iterator<Item = &String> + '_> {
         Box::new(
-            self.nodes()
-                .filter(|n| n.children().is_empty())
-                .filter_map(|n| n.data.as_ref().unwrap().name.as_deref()),
+            self.nodes().filter(|n| self[*n].children().is_empty()).filter_map(|n| self.name(n)),
         )
     }
     fn to_newick(&self) -> String {

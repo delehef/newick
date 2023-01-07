@@ -15,7 +15,7 @@ readme = "README.org"
 [dependencies]
 pest = "2"
 pest_derive = "2"
-sorbus = "0.7"
+sorbus = "0.8"
 thiserror = "1"
 
 [package.metadata.release]
