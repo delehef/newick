@@ -69,8 +69,17 @@ impl Newick for NewickTree {
         )
     }
     fn to_newick(&self) -> String {
-        fn fmt_node(t: &NewickTree, n: usize, r: &mut String) {
+        fn fmt_node(t: &NewickTree, n: usize, r: &mut String, depth: usize) {
+            let IND = " ".repeat(depth * 2);
+
             if t[n].is_leaf() {
+                let is_not_empty = t[n].data.as_ref().unwrap().name.is_some()
+                    || t[n].branch_length.is_some()
+                    || !t[n].data.as_ref().unwrap().attrs.is_empty();
+                if is_not_empty {
+                    r.push_str(&IND);
+                }
+
                 if let Some(n) = t[n].data.as_ref().unwrap().name.as_ref() {
                     r.push_str(n)
                 }
@@ -85,16 +94,26 @@ impl Newick for NewickTree {
                     r.push(']');
                 }
             } else {
-                r.push('(');
+                // first render the children...
+                r.push_str(&format!("{IND}(\n"));
 
                 let mut children = t[n].children().iter().peekable();
                 while let Some(c) = children.next() {
-                    fmt_node(t, *c, r);
+                    fmt_node(t, *c, r, depth + 1);
                     if children.peek().is_some() {
-                        r.push(',');
+                        r.push_str(",\n");
                     }
                 }
-                r.push(')');
+                r.push_str(&format!("\n{IND})\n"));
+
+                // ...then the node itself
+                let is_not_empty = t[n].data.as_ref().unwrap().name.is_some()
+                    || t[n].branch_length.is_some()
+                    || !t[n].data.as_ref().unwrap().attrs.is_empty();
+                if is_not_empty {
+                    r.push_str(&IND);
+                }
+
                 if let Some(n) = t[n].data.as_ref().unwrap().name.as_ref() {
                     r.push_str(n)
                 }
@@ -112,7 +131,7 @@ impl Newick for NewickTree {
         }
         let mut r = String::new();
         if !self.is_empty() {
-            fmt_node(self, self.root(), &mut r);
+            fmt_node(self, self.root(), &mut r, 0);
             r.push(';');
         }
         r
