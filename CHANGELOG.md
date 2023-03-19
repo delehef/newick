@@ -2,11 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.2] - 2023-03-19
+
+### Performance
+
+- Update sorbus
+
 ## [0.7.1] - 2023-02-16
 
 ### Features
 
 - Pretty-format newick trees
+
+### Miscellaneous Tasks
+
+- Release newick version 0.7.1
 
 ## [0.7.0] - 2023-01-07
 
