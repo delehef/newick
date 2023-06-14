@@ -39,7 +39,7 @@ pub type NewickTree = Tree<Data>;
 pub trait Newick {
     fn is_duplication(&self, n: usize) -> bool;
     fn leaf_names(&self) -> Box<dyn Iterator<Item = &String> + '_>;
-    fn to_newick(&self) -> String;
+    fn to_newick(&self, pretty: bool) -> String;
     fn name(&self, n: NodeID) -> Option<&String>;
     fn name_mut(&mut self, n: NodeID) -> Option<&mut String>;
     fn attrs(&self, n: NodeID) -> &Attrs;
@@ -68,16 +68,16 @@ impl Newick for NewickTree {
             self.nodes().filter(|n| self[*n].children().is_empty()).filter_map(|n| self.name(n)),
         )
     }
-    fn to_newick(&self) -> String {
-        fn fmt_node(t: &NewickTree, n: usize, r: &mut String, depth: usize) {
-            let IND = " ".repeat(depth * 2);
+    fn to_newick(&self, pretty: bool) -> String {
+        fn fmt_node(t: &NewickTree, n: usize, r: &mut String, depth: usize, pretty: bool) {
+            let indent = " ".repeat(depth * 2);
 
             if t[n].is_leaf() {
                 let is_not_empty = t[n].data.as_ref().unwrap().name.is_some()
                     || t[n].branch_length.is_some()
                     || !t[n].data.as_ref().unwrap().attrs.is_empty();
-                if is_not_empty {
-                    r.push_str(&IND);
+                if is_not_empty && pretty {
+                    r.push_str(&indent);
                 }
 
                 if let Some(n) = t[n].data.as_ref().unwrap().name.as_ref() {
@@ -95,24 +95,41 @@ impl Newick for NewickTree {
                 }
             } else {
                 // first render the children...
-                r.push_str(&format!("{IND}(\n"));
+                if pretty {
+                    r.push_str(&indent);
+                }
+                r.push('(');
+                if pretty {
+                    r.push('\n');
+                }
 
                 let mut children = t[n].children().iter().peekable();
                 while let Some(c) = children.next() {
-                    fmt_node(t, *c, r, depth + 1);
+                    fmt_node(t, *c, r, depth + 1, pretty);
                     if children.peek().is_some() {
-                        r.push_str(",\n");
+                        r.push(',');
+                        if pretty {
+                            r.push('\n');
+                        }
                     }
                 }
-                r.push_str(&format!("\n{IND})\n"));
-
-                // ...then the node itself
-                let is_not_empty = t[n].data.as_ref().unwrap().name.is_some()
-                    || t[n].branch_length.is_some()
-                    || !t[n].data.as_ref().unwrap().attrs.is_empty();
-                if is_not_empty {
-                    r.push_str(&IND);
+                if pretty {
+                    r.push('\n');
+                    r.push_str(&indent);
                 }
+                r.push(')');
+
+                // if pretty {
+                //     r.push('\n');
+                // }
+                // ...then the node itself
+                // TODO: maybe required for pretty diffs?
+                // let is_not_empty = t[n].data.as_ref().unwrap().name.is_some()
+                //     || t[n].branch_length.is_some()
+                //     || !t[n].data.as_ref().unwrap().attrs.is_empty();
+                // if is_not_empty && pretty {
+                //     r.push_str(&indent);
+                // }
 
                 if let Some(n) = t[n].data.as_ref().unwrap().name.as_ref() {
                     r.push_str(n)
@@ -131,7 +148,7 @@ impl Newick for NewickTree {
         }
         let mut r = String::new();
         if !self.is_empty() {
-            fmt_node(self, self.root(), &mut r, 0);
+            fmt_node(self, self.root(), &mut r, 0, pretty);
             r.push(';');
         }
         r
