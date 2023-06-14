@@ -2,7 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.7.2] - 2023-03-19
+## [0.8.0] - 2023-06-14
+
+### Features
+
+- Add a `pretty` setting to newick formatting
+
+### Miscellaneous Tasks
+
+- Release newick version 0.7.2
 
 ### Performance
 
