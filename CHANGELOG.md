@@ -2,11 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.8.0] - 2023-06-14
+## [0.9.0] - 2023-07-02
 
 ### Features
 
 - Add a `pretty` setting to newick formatting
+
+### Miscellaneous Tasks
+
+- Release newick version 0.8.0
+- Update sorbus
+
+## [0.7.2] - 2023-03-19
 
 ### Miscellaneous Tasks
 
