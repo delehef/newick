@@ -33,8 +33,8 @@ pub struct Data {
     pub attrs: Attrs,
 }
 
-pub type NewickNode = Node<Data>;
-pub type NewickTree = Tree<Data>;
+pub type NewickNode = Node<Data, f32>;
+pub type NewickTree = Tree<Data, (), f32>;
 
 pub trait Newick {
     fn is_duplication(&self, n: usize) -> bool;
@@ -48,19 +48,19 @@ pub trait Newick {
 
 impl Newick for NewickTree {
     fn name(&self, n: NodeID) -> Option<&String> {
-        self[n].data.as_ref().unwrap().name.as_ref()
+        self[n].data().as_ref().unwrap().name.as_ref()
     }
     fn name_mut(&mut self, n: NodeID) -> Option<&mut String> {
-        self[n].data.as_mut().unwrap().name.as_mut()
+        self[n].data_mut().unwrap().name.as_mut()
     }
     fn attrs(&self, n: NodeID) -> &Attrs {
-        &self[n].data.as_ref().unwrap().attrs
+        &self[n].data().as_ref().unwrap().attrs
     }
     fn attrs_mut(&mut self, n: NodeID) -> &mut Attrs {
-        &mut self[n].data.as_mut().unwrap().attrs
+        &mut self[n].data_mut().unwrap().attrs
     }
     fn is_duplication(&self, n: usize) -> bool {
-        self[n].data.as_ref().unwrap().attrs.get("D").map_or(false, |d| d == "Y")
+        self[n].data().as_ref().unwrap().attrs.get("D").map_or(false, |d| d == "Y")
     }
 
     fn leaf_names(&self) -> Box<dyn Iterator<Item = &String> + '_> {
@@ -73,22 +73,22 @@ impl Newick for NewickTree {
             let indent = " ".repeat(depth * 2);
 
             if t[n].is_leaf() {
-                let is_not_empty = t[n].data.as_ref().unwrap().name.is_some()
-                    || t[n].branch_length.is_some()
-                    || !t[n].data.as_ref().unwrap().attrs.is_empty();
+                let is_not_empty = t[n].data().as_ref().unwrap().name.is_some()
+                    || t[n].branch().is_some()
+                    || !t[n].data().as_ref().unwrap().attrs.is_empty();
                 if is_not_empty && pretty {
                     r.push_str(&indent);
                 }
 
-                if let Some(n) = t[n].data.as_ref().unwrap().name.as_ref() {
+                if let Some(n) = t[n].data().as_ref().unwrap().name.as_ref() {
                     r.push_str(n)
                 }
-                if let Some(l) = t[n].branch_length {
+                if let Some(l) = t[n].branch() {
                     r.push_str(&format!(":{}", l))
                 }
-                if !t[n].data.as_ref().unwrap().attrs.is_empty() {
+                if !t[n].data().as_ref().unwrap().attrs.is_empty() {
                     r.push_str("[&&NHX");
-                    for (k, v) in t[n].data.as_ref().unwrap().attrs.iter() {
+                    for (k, v) in t[n].data().as_ref().unwrap().attrs.iter() {
                         r.push_str(&format!(":{}={}", k, v));
                     }
                     r.push(']');
@@ -131,15 +131,15 @@ impl Newick for NewickTree {
                 //     r.push_str(&indent);
                 // }
 
-                if let Some(n) = t[n].data.as_ref().unwrap().name.as_ref() {
+                if let Some(n) = t[n].data().as_ref().unwrap().name.as_ref() {
                     r.push_str(n)
                 }
-                if let Some(l) = t[n].branch_length {
+                if let Some(l) = t[n].branch() {
                     r.push_str(&format!(":{}", l))
                 }
-                if !t[n].data.as_ref().unwrap().attrs.is_empty() {
+                if !t[n].data().as_ref().unwrap().attrs.is_empty() {
                     r.push_str("[&&NHX");
-                    for (k, v) in t[n].data.as_ref().unwrap().attrs.iter() {
+                    for (k, v) in t[n].data().as_ref().unwrap().attrs.iter() {
                         r.push_str(&format!(":{}={}", k, v));
                     }
                     r.push(']');
@@ -192,7 +192,7 @@ pub fn from_string<S: AsRef<str>>(content: S) -> Result<Vec<NewickTree>, NewickE
                     parse_inner(inner, Some(my_id), tree)?;
                 }
                 Rule::name => {
-                    tree[my_id].data.as_mut().unwrap().name = Some(inner.as_str().to_owned());
+                    tree[my_id].data_mut().unwrap().name = Some(inner.as_str().to_owned());
                 }
                 Rule::Attributes => {
                     for attr in inner.into_inner() {
@@ -212,12 +212,12 @@ pub fn from_string<S: AsRef<str>>(content: S) -> Result<Vec<NewickTree>, NewickE
                 .as_str()
                 .parse::<f32>()
                 .map_err(|_| NewickError::NotAFloat(pair.as_str().to_owned()))
-                .map(|x| me.branch_length = Some(x)),
+                .map(|x| me.set_branch(x)),
             Rule::NhxEntry => {
                 let mut kv = pair.into_inner();
                 let k = kv.next().unwrap().as_str().to_owned();
                 let v = kv.next().map(|x| x.as_str().to_owned()).unwrap_or_default();
-                me.data.as_mut().unwrap().attrs.insert(k, v);
+                me.data_mut().unwrap().attrs.insert(k, v);
                 Ok(())
             }
             _ => {
