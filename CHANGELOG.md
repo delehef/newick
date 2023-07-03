@@ -2,11 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.0] - 2023-07-03
+
+### Miscellaneous Tasks
+
+- Update sorbus
+
 ## [0.10.0] - 2023-07-02
 
 ### Miscellaneous Tasks
 
 - Update sorbus
+- Release newick version 0.10.0
 
 ## [0.9.0] - 2023-07-02
 
